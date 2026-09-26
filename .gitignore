@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Env (로컬 설정은 .env.example 을 복사해 사용)
+.env

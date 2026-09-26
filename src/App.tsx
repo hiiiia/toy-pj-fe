@@ -86,7 +86,8 @@ function Layout() {
             )}
           </nav>
           <div className="current-user">
-            <NotificationBell />
+            {/* 임시 비밀번호 상태에서는 서버가 알림 API 를 막으므로(403) 비밀번호를 바꾼 뒤에만 표시 */}
+            {!user?.mustChangePassword && <NotificationBell />}
             <Link to={CHANGE_PASSWORD_PATH} className="user-link" title="비밀번호 변경">
               {user?.name} <span className="muted small">({label('userRole', user?.role)})</span>
             </Link>

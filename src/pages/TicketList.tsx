@@ -200,7 +200,7 @@ export default function TicketList() {
 
 function TicketCreateForm({ draft, onCreated }: { draft?: TicketDraft; onCreated: () => void }) {
   const { label } = useApp();
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const navigate = useNavigate();
   const [title, setTitle] = useState(draft?.title ?? '');
   const [description, setDescription] = useState(draft?.description ?? '');
@@ -242,7 +242,8 @@ function TicketCreateForm({ draft, onCreated }: { draft?: TicketDraft; onCreated
         title: title.trim(),
         description: description.trim(),
         category: (category || undefined) as TicketCategory | undefined,
-        priority: (priority || undefined) as TicketPriority | undefined,
+        // 일반 사용자의 우선순위는 서버가 자동 분류로 정한다 (관리자만 직접 지정)
+        priority: isAdmin ? ((priority || undefined) as TicketPriority | undefined) : undefined,
         assetId: assetId ? Number(assetId) : undefined,
       });
       onCreated();
@@ -271,10 +272,12 @@ function TicketCreateForm({ draft, onCreated }: { draft?: TicketDraft; onCreated
           분류
           <CodeSelect group="ticketCategory" emptyLabel="자동 분류" value={category} onChange={setCategory} />
         </label>
-        <label>
-          우선순위
-          <CodeSelect group="ticketPriority" emptyLabel="자동 분류" value={priority} onChange={setPriority} />
-        </label>
+        {isAdmin && (
+          <label>
+            우선순위
+            <CodeSelect group="ticketPriority" emptyLabel="자동 분류" value={priority} onChange={setPriority} />
+          </label>
+        )}
         <label>
           관련 자산
           <select value={assetId} onChange={(e) => setAssetId(e.target.value)}>
@@ -287,7 +290,11 @@ function TicketCreateForm({ draft, onCreated }: { draft?: TicketDraft; onCreated
           </select>
         </label>
       </div>
-      <p className="hint">분류·우선순위를 비워두면 AI가 자동으로 판단합니다. (AI를 사용할 수 없으면 키워드 규칙으로 분류)</p>
+      <p className="hint">
+        {isAdmin
+          ? '분류·우선순위를 비워두면 AI가 자동으로 판단합니다. (AI를 사용할 수 없으면 키워드 규칙으로 분류)'
+          : '우선순위는 내용을 보고 AI가 자동으로 정하고, 필요하면 담당자가 조정합니다. 분류를 비워두면 분류도 자동으로 판단합니다.'}
+      </p>
       {preview && (
         <p className="preview">
           자동 분류 미리보기: <Badge group="ticketCategory" code={preview.category} /> <Badge group="ticketPriority" code={preview.priority} />

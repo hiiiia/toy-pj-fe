@@ -21,7 +21,8 @@ interface AppContextValue {
 const AppContext = createContext<AppContextValue | null>(null);
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const { isAdmin } = useAuth();
+  const { isAdmin, user } = useAuth();
+  const passwordChangeRequired = user?.mustChangePassword ?? false;
   const [codes, setCodes] = useState<Codes | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [bootError, setBootError] = useState<string | null>(null);
@@ -41,13 +42,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // 사용자 목록은 관리자 전용 API → 관리자로 로그인했을 때만 불러온다
+  // (임시 비밀번호 상태면 서버가 막으므로 비밀번호를 바꾼 뒤에 불러온다)
   useEffect(() => {
-    if (isAdmin) {
+    if (isAdmin && !passwordChangeRequired) {
       reloadUsers().catch((e) => setBootError(errorMessage(e)));
     } else {
       setUsers([]);
     }
-  }, [isAdmin, reloadUsers]);
+  }, [isAdmin, passwordChangeRequired, reloadUsers]);
 
   const value = useMemo<AppContextValue>(() => {
     const labelMap = new Map<string, string>();
