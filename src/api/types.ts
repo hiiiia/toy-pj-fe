@@ -49,6 +49,7 @@ export interface ErrorResponse {
   message: string;
   status: number;
   errors?: FieldError[];
+  requestId?: string;
   timestamp: string;
 }
 
@@ -59,6 +60,15 @@ export interface User {
   email: string;
   department: string | null;
   role: UserRole;
+  /** 관리자가 초기화한 임시 비밀번호로 로그인한 상태 → 비밀번호 변경 화면으로 안내 */
+  mustChangePassword: boolean;
+  /** 로그인 잠금 해제 시각 (잠기지 않았으면 null) */
+  lockedUntil: string | null;
+}
+
+export interface PasswordResetResponse {
+  userId: number;
+  temporaryPassword: string;
 }
 
 export interface UserCreateRequest {
@@ -198,4 +208,43 @@ export interface TriageResult {
 
 export interface ChatResponse {
   answer: string;
+}
+
+// ===== Comment / Attachment =====
+export interface TicketComment {
+  id: number;
+  authorId: number;
+  authorName: string;
+  authorRole: UserRole;
+  content: string;
+  /** IT 관리자에게만 보이는 내부 메모 */
+  internal: boolean;
+  createdAt: string;
+}
+
+export interface TicketAttachment {
+  id: number;
+  filename: string;
+  contentType: string;
+  size: number;
+  uploaderId: number;
+  uploaderName: string;
+  createdAt: string;
+}
+
+// ===== Notification =====
+export type NotificationType = 'TICKET_ASSIGNED' | 'COMMENT_ADDED' | 'SLA_WARNING' | 'SLA_BREACHED';
+
+export interface AppNotification {
+  id: number;
+  type: NotificationType;
+  message: string;
+  ticketId: number | null;
+  read: boolean;
+  createdAt: string;
+}
+
+export interface NotificationList {
+  unreadCount: number;
+  items: AppNotification[];
 }

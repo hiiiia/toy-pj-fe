@@ -6,10 +6,14 @@ import type {
   ChatResponse,
   Codes,
   DashboardSummary,
+  NotificationList,
+  PasswordResetResponse,
   PageResponse,
   SignupRequest,
   Ticket,
+  TicketAttachment,
   TicketCategory,
+  TicketComment,
   TicketCreateRequest,
   TicketDetail,
   TicketPriority,
@@ -30,6 +34,12 @@ export const authApi = {
     return session;
   },
   signup: (body: SignupRequest) => http.post<User>('/api/auth/signup', body),
+  /** 비밀번호 변경: 다른 기기 로그인은 해제되고, 이 기기에는 새 토큰이 발급된다 */
+  changePassword: async (currentPassword: string, newPassword: string) => {
+    const session = await http.patch<TokenResponse>('/api/auth/password', { currentPassword, newPassword });
+    setAccessToken(session.accessToken);
+    return session;
+  },
   logout: async () => {
     try {
       await http.post<void>('/api/auth/logout');
@@ -46,6 +56,33 @@ export const codeApi = {
 export const userApi = {
   list: () => http.get<User[]>('/api/users'),
   create: (body: UserCreateRequest) => http.post<User>('/api/users', body),
+  resetPassword: (id: number) => http.post<PasswordResetResponse>(`/api/users/${id}/password-reset`),
+  unlock: (id: number) => http.post<User>(`/api/users/${id}/unlock`),
+};
+
+export const commentApi = {
+  list: (ticketId: number) => http.get<TicketComment[]>(`/api/tickets/${ticketId}/comments`),
+  create: (ticketId: number, content: string, internal: boolean) =>
+    http.post<TicketComment>(`/api/tickets/${ticketId}/comments`, { content, internal }),
+  remove: (ticketId: number, commentId: number) => http.delete(`/api/tickets/${ticketId}/comments/${commentId}`),
+};
+
+export const attachmentApi = {
+  list: (ticketId: number) => http.get<TicketAttachment[]>(`/api/tickets/${ticketId}/attachments`),
+  upload: (ticketId: number, file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    return http.upload<TicketAttachment>(`/api/tickets/${ticketId}/attachments`, form);
+  },
+  download: (ticketId: number, attachmentId: number) =>
+    http.blob(`/api/tickets/${ticketId}/attachments/${attachmentId}`),
+  remove: (ticketId: number, attachmentId: number) => http.delete(`/api/tickets/${ticketId}/attachments/${attachmentId}`),
+};
+
+export const notificationApi = {
+  list: () => http.get<NotificationList>('/api/notifications'),
+  markRead: (id: number) => http.post<void>(`/api/notifications/${id}/read`),
+  markAllRead: () => http.post<void>('/api/notifications/read-all'),
 };
 
 export const assetApi = {

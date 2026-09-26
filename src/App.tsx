@@ -1,10 +1,12 @@
-import { BrowserRouter, Navigate, NavLink, Outlet, Route, Routes, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Link, Navigate, NavLink, Outlet, Route, Routes, useNavigate } from 'react-router-dom';
 import Alert from './components/Alert';
-import { RequireAdmin, RequireAuth } from './components/RouteGuards';
+import NotificationBell from './components/NotificationBell';
+import { CHANGE_PASSWORD_PATH, RequireAdmin, RequireAuth } from './components/RouteGuards';
 import { AppProvider, useApp } from './context/AppContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import AiSupport from './pages/AiSupport';
 import AssetList from './pages/AssetList';
+import ChangePasswordPage from './pages/ChangePasswordPage';
 import Dashboard from './pages/Dashboard';
 import LoginPage from './pages/LoginPage';
 import NotFound from './pages/NotFound';
@@ -35,6 +37,7 @@ export default function App() {
               <Route path="/assets" element={<AssetList />} />
               <Route path="/ai-support" element={<AiSupport />} />
               <Route path="/users" element={<RequireAdmin><UserList /></RequireAdmin>} />
+              <Route path={CHANGE_PASSWORD_PATH} element={<ChangePasswordPage />} />
               <Route path="*" element={<NotFound />} />
             </Route>
           </Routes>
@@ -83,9 +86,10 @@ function Layout() {
             )}
           </nav>
           <div className="current-user">
-            <span>
+            <NotificationBell />
+            <Link to={CHANGE_PASSWORD_PATH} className="user-link" title="비밀번호 변경">
               {user?.name} <span className="muted small">({label('userRole', user?.role)})</span>
-            </span>
+            </Link>
             <button type="button" className="btn btn-sm" onClick={onLogout}>
               로그아웃
             </button>

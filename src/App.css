@@ -511,3 +511,203 @@ td:has(.title-link) {
   padding-top: 12px;
   border-top: 1px dashed var(--border);
 }
+
+/* ===== 공통 보조 ===== */
+.narrow {
+  max-width: 520px;
+}
+.notice {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  background: #fff8e6;
+  border: 1px solid #f3dca4;
+  color: #6b4d00;
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+}
+.notice.success {
+  background: #e9f7ef;
+  border-color: #b7e2c6;
+  color: #1e6b3d;
+}
+.temp-password {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 15px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+.link-button {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--primary);
+  cursor: pointer;
+  text-align: left;
+}
+.link-button:hover {
+  text-decoration: underline;
+}
+.link-button.danger {
+  color: var(--danger);
+}
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.section-header h3 {
+  margin: 0;
+}
+.user-link {
+  color: var(--text);
+}
+.user-link:hover {
+  color: var(--primary);
+}
+
+/* ===== 첨부파일 ===== */
+.file-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.file-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px dashed var(--border);
+  flex-wrap: wrap;
+}
+.file-list li .btn {
+  margin-left: auto;
+}
+
+/* ===== 댓글 ===== */
+.comment-list {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+}
+.comment {
+  padding: 10px 0;
+  border-bottom: 1px dashed var(--border);
+}
+.comment.internal {
+  background: #fffbea;
+  border-left: 3px solid #e6b800;
+  padding-left: 10px;
+}
+.comment-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.comment-meta .link-button {
+  margin-left: auto;
+}
+.comment-body {
+  margin: 6px 0 0;
+  white-space: pre-wrap;
+}
+.comment-form textarea {
+  width: 100%;
+}
+.badge-internal {
+  background: #fff3c4;
+  color: #7a5c00;
+}
+
+/* ===== 알림 ===== */
+.bell {
+  position: relative;
+}
+.bell-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.bell-count {
+  background: var(--danger);
+  color: #fff;
+  border-radius: 999px;
+  font-size: 11px;
+  padding: 0 6px;
+  line-height: 18px;
+}
+.bell-panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  width: min(360px, calc(100vw - 32px));
+  max-height: 420px;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  z-index: 20;
+}
+.bell-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.bell-panel ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.bell-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  text-align: left;
+  background: #f5f8ff;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  padding: 10px 12px;
+  font: inherit;
+  color: var(--text);
+  cursor: pointer;
+}
+.bell-item:hover {
+  background: #eaf0ff;
+}
+.bell-item.read {
+  background: var(--surface);
+  color: var(--muted);
+}
+.bell-type {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--primary);
+}
+.bell-item.type-SLA_BREACHED .bell-type {
+  color: var(--danger);
+}
+.bell-item.type-SLA_WARNING .bell-type {
+  color: var(--warn);
+}
+
+/* 좁은 화면에서는 알림 창을 화면 폭에 맞춰 고정 */
+@media (max-width: 900px) {
+  .bell-panel {
+    position: fixed;
+    top: 56px;
+    left: 16px;
+    right: 16px;
+    width: auto;
+  }
+}

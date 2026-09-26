@@ -14,13 +14,16 @@ export class ApiError extends Error {
   readonly status: number;
   readonly code: string;
   readonly fieldErrors: FieldError[];
+  /** 서버 로그 추적용 ID. 문의할 때 알려주면 해당 요청의 로그를 바로 찾을 수 있다. */
+  readonly requestId?: string;
 
-  constructor(status: number, code: string, message: string, fieldErrors: FieldError[] = []) {
+  constructor(status: number, code: string, message: string, fieldErrors: FieldError[] = [], requestId?: string) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
     this.code = code;
     this.fieldErrors = fieldErrors;
+    this.requestId = requestId;
   }
 }
 
@@ -87,14 +90,16 @@ export function toQuery(params: object = {}): string {
 
 async function send(method: string, path: string, body?: unknown): Promise<Response> {
   const headers: Record<string, string> = {};
-  if (body !== undefined) headers['Content-Type'] = 'application/json';
+  // FormData(파일 업로드)는 브라우저가 boundary 를 포함한 Content-Type 을 직접 만들도록 비워 둔다
+  const isForm = body instanceof FormData;
+  if (body !== undefined && !isForm) headers['Content-Type'] = 'application/json';
   if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
   try {
     return await fetch(`${API_BASE_URL}${path}`, {
       method,
       headers,
       credentials: 'include', // refresh token 쿠키 전송
-      body: body !== undefined ? JSON.stringify(body) : undefined,
+      body: body === undefined ? undefined : isForm ? body : JSON.stringify(body),
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
   } catch (e) {
@@ -105,7 +110,8 @@ async function send(method: string, path: string, body?: unknown): Promise<Respo
   }
 }
 
-async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+/** 401 이면 토큰을 재발급받아 한 번 재시도하고, 실패 응답은 ApiError 로 바꾼다. */
+async function fetchWithAuth(method: string, path: string, body?: unknown): Promise<Response> {
   let response = await send(method, path, body);
 
   // access token 만료(401) → refresh token 으로 재발급 후 한 번만 재시도
@@ -120,6 +126,11 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   if (!response.ok) {
     throw await toApiError(response);
   }
+  return response;
+}
+
+async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  const response = await fetchWithAuth(method, path, body);
   if (response.status === 204) {
     return undefined as T;
   }
@@ -132,9 +143,11 @@ async function toApiError(response: Response): Promise<ApiError> {
     const fieldErrors = error.errors ?? [];
     const detail = fieldErrors.map((e) => `${e.field}: ${e.reason}`).join(', ');
     const message = error.message ?? `요청에 실패했습니다. (${response.status})`;
-    return new ApiError(response.status, error.code ?? 'UNKNOWN', detail ? `${message} (${detail})` : message, fieldErrors);
+    const requestId = error.requestId ?? response.headers.get('X-Request-Id') ?? undefined;
+    return new ApiError(response.status, error.code ?? 'UNKNOWN', detail ? `${message} (${detail})` : message, fieldErrors, requestId);
   } catch {
-    return new ApiError(response.status, 'UNKNOWN', `요청에 실패했습니다. (${response.status})`);
+    const requestId = response.headers.get('X-Request-Id') ?? undefined;
+    return new ApiError(response.status, 'UNKNOWN', `요청에 실패했습니다. (${response.status})`, [], requestId);
   }
 }
 
@@ -143,9 +156,19 @@ export const http = {
   post: <T>(path: string, body?: unknown) => request<T>('POST', path, body ?? {}),
   patch: <T>(path: string, body: unknown) => request<T>('PATCH', path, body),
   delete: (path: string) => request<void>('DELETE', path),
+  /** multipart/form-data 업로드 */
+  upload: <T>(path: string, form: FormData) => request<T>('POST', path, form),
+  /** 파일 다운로드: 인증 헤더가 필요해 <a href> 대신 fetch 로 받아 Blob 으로 돌려준다 */
+  blob: async (path: string): Promise<Blob> => (await fetchWithAuth('GET', path)).blob(),
 };
 
+/**
+ * 화면에 보여줄 에러 문구. 서버 오류(5xx)는 문의할 때 쓸 수 있도록 요청 ID 를 덧붙인다.
+ */
 export function errorMessage(error: unknown): string {
+  if (error instanceof ApiError) {
+    return error.status >= 500 && error.requestId ? `${error.message} (요청 ID: ${error.requestId})` : error.message;
+  }
   if (error instanceof Error) return error.message;
   return '알 수 없는 오류가 발생했습니다.';
 }

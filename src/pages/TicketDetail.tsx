@@ -6,6 +6,8 @@ import type { TicketCategory, TicketDetail as TicketDetailData, TicketPriority, 
 import Alert from '../components/Alert';
 import Badge from '../components/Badge';
 import CodeSelect from '../components/CodeSelect';
+import TicketAttachments from '../components/TicketAttachments';
+import TicketComments from '../components/TicketComments';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { formatDateTime } from '../utils/format';
@@ -190,6 +192,11 @@ export default function TicketDetail() {
             <p className="muted">IT 관리자가 확인 후 처리합니다. 진행 상황은 아래 처리 이력에서 볼 수 있어요.</p>
           )}
         </div>
+      </div>
+
+      <div className="detail-layout">
+        <TicketComments ticketId={ticket.id} readOnly={finished} />
+        <TicketAttachments ticketId={ticket.id} readOnly={finished} />
       </div>
 
       <div className="card">
