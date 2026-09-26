@@ -13,7 +13,8 @@ export default defineConfig(({ mode }) => {
       proxy: {
         '/api': {
           target: env.BACKEND_URL || 'http://localhost:8080',
-          changeOrigin: true,
+          // Host 헤더를 브라우저 주소 그대로 전달 → 백엔드가 Origin 과 같은 출처로 인식해 CORS 검사 대상이 되지 않음
+          changeOrigin: false,
         },
       },
     },
