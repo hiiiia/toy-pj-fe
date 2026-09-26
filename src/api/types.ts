@@ -178,6 +178,10 @@ export interface TicketSearchParams {
   requesterId?: number;
   assigneeId?: number;
   unassigned?: boolean;
+  /** 미완료(접수대기·처리중)만 */
+  active?: boolean;
+  /** 처리 기한이 지난 미완료 티켓만 */
+  overdue?: boolean;
   keyword?: string;
   page?: number;
   size?: number;

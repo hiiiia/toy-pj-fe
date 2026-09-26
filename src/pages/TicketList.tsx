@@ -35,6 +35,8 @@ function readParams(sp: URLSearchParams): TicketSearchParams {
     requesterId: sp.get('requesterId') ? Number(sp.get('requesterId')) : undefined,
     assigneeId: sp.get('assigneeId') ? Number(sp.get('assigneeId')) : undefined,
     unassigned: sp.get('unassigned') === 'true' || undefined,
+    active: sp.get('active') === 'true' || undefined,
+    overdue: sp.get('overdue') === 'true' || undefined,
     keyword: sp.get('keyword') || undefined,
     page: sp.get('page') ? Number(sp.get('page')) : 0,
     size: 10,
@@ -130,6 +132,14 @@ export default function TicketList() {
             </label>
           </>
         )}
+        <label className="checkbox">
+          <input type="checkbox" checked={Boolean(params.active)} onChange={(e) => updateParam('active', e.target.checked ? 'true' : undefined)} />
+          미완료만
+        </label>
+        <label className="checkbox">
+          <input type="checkbox" checked={Boolean(params.overdue)} onChange={(e) => updateParam('overdue', e.target.checked ? 'true' : undefined)} />
+          기한 초과만
+        </label>
         <form onSubmit={onSearch} className="search">
           <input value={keyword} onChange={(e) => setKeyword(e.target.value)} placeholder="제목·내용 검색" />
           <button type="submit" className="btn">검색</button>

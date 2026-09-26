@@ -38,9 +38,15 @@ export default function Dashboard() {
       </div>
 
       <div className="stat-grid">
-        <StatCard title="처리 대기·진행중 티켓" value={active} unit="건" to="/tickets?status=OPEN" />
+        <StatCard title="처리 대기·진행중 티켓" value={active} unit="건" to="/tickets?active=true" />
         <StatCard title="담당자 미배정" value={tickets.unassigned} unit="건" to="/tickets?unassigned=true&status=OPEN" tone="warn" />
-        <StatCard title="처리 기한(SLA) 초과" value={tickets.overdue} unit="건" tone={tickets.overdue > 0 ? 'danger' : undefined} />
+        <StatCard
+          title="처리 기한(SLA) 초과"
+          value={tickets.overdue}
+          unit="건"
+          to="/tickets?overdue=true"
+          tone={tickets.overdue > 0 ? 'danger' : undefined}
+        />
         <StatCard title="사용중 자산" value={assets.byStatus.IN_USE} unit={`/ ${assets.total}대`} to="/assets?status=IN_USE" />
       </div>
 
