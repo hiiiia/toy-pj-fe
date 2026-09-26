@@ -64,8 +64,24 @@ export interface User {
 export interface UserCreateRequest {
   name: string;
   email: string;
+  password: string;
   department?: string;
   role: UserRole;
+}
+
+// ===== Auth =====
+export interface TokenResponse {
+  accessToken: string;
+  tokenType: 'Bearer';
+  expiresIn: number;
+  user: User;
+}
+
+export interface SignupRequest {
+  name: string;
+  email: string;
+  password: string;
+  department?: string;
 }
 
 // ===== Asset =====
@@ -127,6 +143,7 @@ export interface TicketHistory {
   fromStatus: TicketStatus | null;
   toStatus: TicketStatus;
   note: string | null;
+  actorName: string | null;
   createdAt: string;
 }
 
@@ -141,7 +158,6 @@ export interface TicketCreateRequest {
   description: string;
   category?: TicketCategory;
   priority?: TicketPriority;
-  requesterId: number;
   assetId?: number;
 }
 

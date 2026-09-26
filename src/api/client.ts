@@ -1,10 +1,10 @@
-import type { ErrorResponse, FieldError } from './types';
+import type { ErrorResponse, FieldError, TokenResponse } from './types';
 
 /**
  * 비워두면 같은 출처(/api)로 요청하고, 개발 중에는 Vite 프록시가 백엔드로 전달한다.
  * 프론트와 백엔드를 다른 도메인에 배포할 때만 VITE_API_BASE_URL 을 지정한다.
  */
-const API_BASE_URL: string = import.meta.env.VITE_API_BASE_URL ?? '';
+const API_BASE_URL: string = import.meta.env.VITE_API_BASE_URL || '';
 
 /**
  * 백엔드 공통 에러 포맷(ErrorResponse)을 담는 예외.
@@ -24,6 +24,53 @@ export class ApiError extends Error {
   }
 }
 
+// ===== 인증 토큰 관리 =====
+// access token 은 XSS 로 탈취되기 쉬운 localStorage 대신 메모리(변수)에만 둔다.
+// 새로고침하면 사라지지만, HttpOnly 쿠키의 refresh token 으로 다시 발급받는다.
+let accessToken: string | null = null;
+
+/** 서버가 응답하지 않을 때 화면이 무한히 기다리지 않도록 요청마다 제한 시간을 둔다. (AI 응답 대기를 고려해 30초) */
+const REQUEST_TIMEOUT_MS = 30_000;
+const REFRESH_TIMEOUT_MS = 10_000;
+let refreshing: Promise<TokenResponse | null> | null = null;
+let sessionListener: ((session: TokenResponse | null) => void) | null = null;
+
+export function setAccessToken(token: string | null) {
+  accessToken = token;
+}
+
+/** 로그인 상태가 바뀌면(재발급 성공/만료) 알려줄 함수를 등록한다. AuthContext 가 사용한다. */
+export function onSessionChange(listener: (session: TokenResponse | null) => void) {
+  sessionListener = listener;
+}
+
+/**
+ * refresh token 쿠키로 access token 을 재발급한다.
+ * 여러 요청이 동시에 401 을 받아도 재발급 요청은 한 번만 보내도록 진행 중인 Promise 를 공유한다.
+ */
+export function refreshSession(): Promise<TokenResponse | null> {
+  if (!refreshing) {
+    refreshing = (async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
+          method: 'POST',
+          credentials: 'include',
+          signal: AbortSignal.timeout(REFRESH_TIMEOUT_MS),
+        });
+        if (!res.ok) return null;
+        const session = (await res.json()) as TokenResponse;
+        accessToken = session.accessToken;
+        return session;
+      } catch {
+        return null;
+      }
+    })().finally(() => {
+      refreshing = null;
+    });
+  }
+  return refreshing;
+}
+
 type QueryValue = string | number | boolean | undefined | null;
 
 /** undefined/null/빈 문자열은 쿼리스트링에서 제외한다. */
@@ -38,16 +85,36 @@ export function toQuery(params: object = {}): string {
   return query ? `?${query}` : '';
 }
 
-async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
-  let response: Response;
+async function send(method: string, path: string, body?: unknown): Promise<Response> {
+  const headers: Record<string, string> = {};
+  if (body !== undefined) headers['Content-Type'] = 'application/json';
+  if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
   try {
-    response = await fetch(`${API_BASE_URL}${path}`, {
+    return await fetch(`${API_BASE_URL}${path}`, {
       method,
-      headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
+      headers,
+      credentials: 'include', // refresh token 쿠키 전송
       body: body !== undefined ? JSON.stringify(body) : undefined,
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
-  } catch {
+  } catch (e) {
+    if (e instanceof DOMException && e.name === 'TimeoutError') {
+      throw new ApiError(0, 'TIMEOUT', '서버 응답이 너무 늦습니다. 잠시 후 다시 시도하세요.');
+    }
     throw new ApiError(0, 'NETWORK', '서버에 연결할 수 없습니다. 백엔드가 실행 중인지 확인하세요.');
+  }
+}
+
+async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  let response = await send(method, path, body);
+
+  // access token 만료(401) → refresh token 으로 재발급 후 한 번만 재시도
+  if (response.status === 401 && !path.startsWith('/api/auth/')) {
+    const session = await refreshSession();
+    sessionListener?.(session);
+    if (session) {
+      response = await send(method, path, body);
+    }
   }
 
   if (!response.ok) {

@@ -7,6 +7,7 @@ import Alert from '../components/Alert';
 import Badge from '../components/Badge';
 import CodeSelect from '../components/CodeSelect';
 import { useApp } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
 import { formatDateTime } from '../utils/format';
 
 /** 상태 변경 버튼 문구 (백엔드가 내려주는 nextStatuses 기준으로 버튼을 그린다) */
@@ -28,7 +29,8 @@ function actionLabel(current: TicketStatus, next: TicketStatus): string {
 export default function TicketDetail() {
   const { id } = useParams();
   const ticketId = Number(id);
-  const { currentUser, admins, label } = useApp();
+  const { admins, label } = useApp();
+  const { user, isAdmin } = useAuth();
   const [detail, setDetail] = useState<TicketDetailData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState('');
@@ -70,9 +72,8 @@ export default function TicketDetail() {
   }
 
   const { ticket, nextStatuses, histories } = detail;
-  const isAdmin = currentUser?.role === 'ADMIN';
   const finished = ticket.status === 'CLOSED' || ticket.status === 'CANCELED';
-  const isRequester = currentUser?.id === ticket.requesterId;
+  const isRequester = user?.id === ticket.requesterId;
 
   return (
     <section>
@@ -186,7 +187,7 @@ export default function TicketDetail() {
               </button>
             </div>
           ) : (
-            <p className="muted">처리는 IT 관리자만 할 수 있습니다. 상단에서 관리자 계정을 선택하세요.</p>
+            <p className="muted">IT 관리자가 확인 후 처리합니다. 진행 상황은 아래 처리 이력에서 볼 수 있어요.</p>
           )}
         </div>
       </div>
@@ -206,7 +207,10 @@ export default function TicketDetail() {
                   <Badge group="ticketStatus" code={h.toStatus} />
                 )}
               </span>
-              <span className="timeline-note">{h.note ?? ''}</span>
+              <span className="timeline-note">
+                {h.note ?? ''}
+                {h.actorName && <span className="muted small"> · {h.actorName}</span>}
+              </span>
             </li>
           ))}
         </ol>

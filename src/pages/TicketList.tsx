@@ -17,6 +17,7 @@ import Badge from '../components/Badge';
 import CodeSelect from '../components/CodeSelect';
 import Pagination from '../components/Pagination';
 import { useApp } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
 import { formatDateTime } from '../utils/format';
 
 /** AI 지원 화면에서 "티켓으로 접수"를 누르면 넘어오는 초기값 */
@@ -41,7 +42,7 @@ function readParams(sp: URLSearchParams): TicketSearchParams {
 }
 
 export default function TicketList() {
-  const { currentUser } = useApp();
+  const { user, isAdmin } = useAuth();
   const location = useLocation();
   const draft = (location.state as { draft?: TicketDraft } | null)?.draft;
 
@@ -84,14 +85,16 @@ export default function TicketList() {
     updateParam('keyword', keyword.trim() || undefined);
   };
 
-  const mineOnly = currentUser != null && params.requesterId === currentUser.id;
+  const assignedToMe = user != null && params.assigneeId === user.id;
 
   return (
     <section>
       <div className="page-header">
         <div>
-          <h2>IT 지원 티켓</h2>
-          <p className="muted">장애 신고와 IT 요청을 접수하고 처리 현황을 추적합니다.</p>
+          <h2>{isAdmin ? 'IT 지원 티켓' : '내 티켓'}</h2>
+          <p className="muted">
+            {isAdmin ? '접수된 장애·요청을 배정하고 처리합니다.' : '장애 신고와 IT 요청을 접수하고 처리 현황을 확인합니다.'}
+          </p>
         </div>
         <button type="button" className="btn btn-primary" onClick={() => setShowForm((v) => !v)}>
           {showForm ? '접수 닫기' : '+ 티켓 접수'}
@@ -110,18 +113,23 @@ export default function TicketList() {
         <CodeSelect group="ticketStatus" emptyLabel="전체 상태" value={params.status ?? ''} onChange={(v) => updateParam('status', v)} />
         <CodeSelect group="ticketPriority" emptyLabel="전체 우선순위" value={params.priority ?? ''} onChange={(v) => updateParam('priority', v)} />
         <CodeSelect group="ticketCategory" emptyLabel="전체 분류" value={params.category ?? ''} onChange={(v) => updateParam('category', v)} />
-        <label className="checkbox">
-          <input
-            type="checkbox"
-            checked={mineOnly}
-            onChange={(e) => updateParam('requesterId', e.target.checked && currentUser ? String(currentUser.id) : undefined)}
-          />
-          내가 요청한 티켓
-        </label>
-        <label className="checkbox">
-          <input type="checkbox" checked={Boolean(params.unassigned)} onChange={(e) => updateParam('unassigned', e.target.checked ? 'true' : undefined)} />
-          미배정만
-        </label>
+        {/* 일반 사용자는 서버가 본인 티켓만 돌려주므로 담당자 관련 필터는 관리자에게만 보여준다 */}
+        {isAdmin && (
+          <>
+            <label className="checkbox">
+              <input
+                type="checkbox"
+                checked={assignedToMe}
+                onChange={(e) => updateParam('assigneeId', e.target.checked && user ? String(user.id) : undefined)}
+              />
+              내 담당
+            </label>
+            <label className="checkbox">
+              <input type="checkbox" checked={Boolean(params.unassigned)} onChange={(e) => updateParam('unassigned', e.target.checked ? 'true' : undefined)} />
+              미배정만
+            </label>
+          </>
+        )}
         <form onSubmit={onSearch} className="search">
           <input value={keyword} onChange={(e) => setKeyword(e.target.value)} placeholder="제목·내용 검색" />
           <button type="submit" className="btn">검색</button>
@@ -181,7 +189,8 @@ export default function TicketList() {
 }
 
 function TicketCreateForm({ draft, onCreated }: { draft?: TicketDraft; onCreated: () => void }) {
-  const { currentUser, label } = useApp();
+  const { label } = useApp();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [title, setTitle] = useState(draft?.title ?? '');
   const [description, setDescription] = useState(draft?.description ?? '');
@@ -195,12 +204,12 @@ function TicketCreateForm({ draft, onCreated }: { draft?: TicketDraft; onCreated
 
   // 현재 사용자가 사용중인 자산만 선택지로 제공
   useEffect(() => {
-    if (!currentUser) return;
+    if (!user) return;
     assetApi
-      .search({ assignedUserId: currentUser.id, size: 50 })
+      .search({ assignedUserId: user.id, size: 50 })
       .then((p) => setMyAssets(p.content))
       .catch(() => setMyAssets([]));
-  }, [currentUser]);
+  }, [user]);
 
   const runPreview = async () => {
     if (!title.trim() || !description.trim()) {
@@ -217,10 +226,6 @@ function TicketCreateForm({ draft, onCreated }: { draft?: TicketDraft; onCreated
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!currentUser) {
-      setError('상단에서 현재 사용자를 먼저 선택하세요.');
-      return;
-    }
     setSubmitting(true);
     try {
       const created = await ticketApi.create({
@@ -228,7 +233,6 @@ function TicketCreateForm({ draft, onCreated }: { draft?: TicketDraft; onCreated
         description: description.trim(),
         category: (category || undefined) as TicketCategory | undefined,
         priority: (priority || undefined) as TicketPriority | undefined,
-        requesterId: currentUser.id,
         assetId: assetId ? Number(assetId) : undefined,
       });
       onCreated();
@@ -242,7 +246,7 @@ function TicketCreateForm({ draft, onCreated }: { draft?: TicketDraft; onCreated
 
   return (
     <form className="card form" onSubmit={onSubmit}>
-      <h3>티켓 접수 <span className="muted small">요청자: {currentUser?.name ?? '-'}</span></h3>
+      <h3>티켓 접수 <span className="muted small">요청자: {user?.name ?? '-'}</span></h3>
       <Alert message={error} onClose={() => setError(null)} />
       <label>
         제목

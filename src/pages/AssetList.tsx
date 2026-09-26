@@ -8,6 +8,7 @@ import Badge from '../components/Badge';
 import CodeSelect from '../components/CodeSelect';
 import Pagination from '../components/Pagination';
 import { useApp } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
 import { formatDate } from '../utils/format';
 
 function readParams(sp: URLSearchParams): AssetSearchParams {
@@ -21,8 +22,7 @@ function readParams(sp: URLSearchParams): AssetSearchParams {
 }
 
 export default function AssetList() {
-  const { currentUser } = useApp();
-  const isAdmin = currentUser?.role === 'ADMIN';
+  const { isAdmin } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const params = readParams(searchParams);
   const [keyword, setKeyword] = useState(params.keyword ?? '');
@@ -69,8 +69,10 @@ export default function AssetList() {
     <section>
       <div className="page-header">
         <div>
-          <h2>IT 자산 관리</h2>
-          <p className="muted">노트북·모니터·라이선스 등 사내 IT 자산의 배정과 상태를 관리합니다.</p>
+          <h2>{isAdmin ? 'IT 자산 관리' : '내 자산'}</h2>
+          <p className="muted">
+            {isAdmin ? '노트북·모니터·라이선스 등 사내 IT 자산의 배정과 상태를 관리합니다.' : '나에게 배정된 IT 자산입니다. 문제가 있으면 티켓을 접수하세요.'}
+          </p>
         </div>
         {isAdmin && (
           <button type="button" className="btn btn-primary" onClick={() => setShowForm((v) => !v)}>
@@ -104,7 +106,6 @@ export default function AssetList() {
         </form>
       </div>
 
-      {!isAdmin && <p className="hint">자산 등록·배정 등 관리 작업은 IT 관리자만 할 수 있습니다.</p>}
       <Alert message={error} onClose={() => setError(null)} />
 
       {page && (

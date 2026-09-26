@@ -1,4 +1,4 @@
-import { http, toQuery } from './client';
+import { http, setAccessToken, toQuery } from './client';
 import type {
   Asset,
   AssetCreateRequest,
@@ -7,6 +7,7 @@ import type {
   Codes,
   DashboardSummary,
   PageResponse,
+  SignupRequest,
   Ticket,
   TicketCategory,
   TicketCreateRequest,
@@ -14,12 +15,29 @@ import type {
   TicketPriority,
   TicketSearchParams,
   TicketStatus,
+  TokenResponse,
   TriageResult,
   User,
   UserCreateRequest,
 } from './types';
 
 /** 백엔드 엔드포인트를 한 곳에 모아 페이지 컴포넌트에서 URL 문자열을 직접 다루지 않게 한다. */
+
+export const authApi = {
+  login: async (email: string, password: string) => {
+    const session = await http.post<TokenResponse>('/api/auth/login', { email, password });
+    setAccessToken(session.accessToken);
+    return session;
+  },
+  signup: (body: SignupRequest) => http.post<User>('/api/auth/signup', body),
+  logout: async () => {
+    try {
+      await http.post<void>('/api/auth/logout');
+    } finally {
+      setAccessToken(null);
+    }
+  },
+};
 
 export const codeApi = {
   getAll: () => http.get<Codes>('/api/codes'),

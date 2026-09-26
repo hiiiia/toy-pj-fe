@@ -2,65 +2,52 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { codeApi, userApi } from '../api';
 import { errorMessage } from '../api/client';
 import type { CodeGroup, Codes, User } from '../api/types';
+import { useAuth } from './AuthContext';
 
 /**
- * 앱 전역 상태
- * - codes: 백엔드 enum 코드 → 한글 라벨 (GET /api/codes)
- * - users / currentUser: 로그인 기능이 아직 없으므로, 화면 상단에서 "현재 사용자"를 선택해
- *   티켓 요청자(requesterId)와 관리자 권한 버튼 노출 여부를 결정한다.
+ * 앱 전역 데이터
+ * - codes: 백엔드 enum 코드 → 한글 라벨 (GET /api/codes, 로그인 불필요)
+ * - users / admins: 담당자 지정·자산 배정에 쓰는 사용자 목록 (관리자만 조회 가능)
  */
 interface AppContextValue {
   codes: Codes | null;
   label: (group: CodeGroup, code: string | null | undefined) => string;
   users: User[];
   admins: User[];
-  currentUser: User | null;
-  setCurrentUserId: (id: number) => void;
   reloadUsers: () => Promise<void>;
   bootError: string | null;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
-const CURRENT_USER_KEY = 'yh-fe.currentUserId';
-
-function readStoredUserId(): number | null {
-  try {
-    const value = localStorage.getItem(CURRENT_USER_KEY);
-    return value ? Number(value) : null;
-  } catch {
-    return null;
-  }
-}
 
 export function AppProvider({ children }: { children: ReactNode }) {
+  const { isAdmin } = useAuth();
   const [codes, setCodes] = useState<Codes | null>(null);
   const [users, setUsers] = useState<User[]>([]);
-  const [currentUserId, setCurrentUserIdState] = useState<number | null>(readStoredUserId);
   const [bootError, setBootError] = useState<string | null>(null);
 
-  const reloadUsers = useCallback(async () => {
-    const list = await userApi.list();
-    setUsers(list);
-  }, []);
-
   useEffect(() => {
-    Promise.all([codeApi.getAll(), userApi.list()])
-      .then(([codeData, userList]) => {
-        setCodes(codeData);
-        setUsers(userList);
+    codeApi
+      .getAll()
+      .then((data) => {
+        setCodes(data);
         setBootError(null);
       })
       .catch((e) => setBootError(errorMessage(e)));
   }, []);
 
-  const setCurrentUserId = useCallback((id: number) => {
-    setCurrentUserIdState(id);
-    try {
-      localStorage.setItem(CURRENT_USER_KEY, String(id));
-    } catch {
-      // 저장소를 쓸 수 없는 환경이면 새로고침 시 기본값으로 돌아간다.
-    }
+  const reloadUsers = useCallback(async () => {
+    setUsers(await userApi.list());
   }, []);
+
+  // 사용자 목록은 관리자 전용 API → 관리자로 로그인했을 때만 불러온다
+  useEffect(() => {
+    if (isAdmin) {
+      reloadUsers().catch((e) => setBootError(errorMessage(e)));
+    } else {
+      setUsers([]);
+    }
+  }, [isAdmin, reloadUsers]);
 
   const value = useMemo<AppContextValue>(() => {
     const labelMap = new Map<string, string>();
@@ -69,19 +56,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
         codes[group].forEach((item) => labelMap.set(`${group}.${item.code}`, item.label)),
       );
     }
-    // 저장된 사용자가 없거나 삭제되었으면 첫 번째 사용자를 기본값으로 사용
-    const currentUser = users.find((u) => u.id === currentUserId) ?? users[0] ?? null;
     return {
       codes,
       label: (group, code) => (code ? labelMap.get(`${group}.${code}`) ?? code : '-'),
       users,
       admins: users.filter((u) => u.role === 'ADMIN'),
-      currentUser,
-      setCurrentUserId,
       reloadUsers,
       bootError,
     };
-  }, [codes, users, currentUserId, setCurrentUserId, reloadUsers, bootError]);
+  }, [codes, users, reloadUsers, bootError]);
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }
