@@ -12,6 +12,7 @@ interface AuthContextValue {
   login: (email: string, password: string) => Promise<User>;
   signup: (body: SignupRequest) => Promise<User>;
   logout: () => Promise<void>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -51,6 +52,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [login],
   );
 
+  const changePassword = useCallback(async (currentPassword: string, newPassword: string) => {
+    const session = await authApi.changePassword(currentPassword, newPassword);
+    setUser(session.user); // mustChangePassword 가 false 로 바뀐 사용자 정보
+  }, []);
+
   const logout = useCallback(async () => {
     try {
       await authApi.logout();
@@ -61,8 +67,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo<AuthContextValue>(
-    () => ({ status, user, isAdmin: user?.role === 'ADMIN', login, signup, logout }),
-    [status, user, login, signup, logout],
+    () => ({ status, user, isAdmin: user?.role === 'ADMIN', login, signup, logout, changePassword }),
+    [status, user, login, signup, logout, changePassword],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

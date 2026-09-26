@@ -3,9 +3,8 @@ import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { errorMessage } from '../api/client';
 import Alert from '../components/Alert';
 import { useAuth } from '../context/AuthContext';
+import { PASSWORD_RULE, PASSWORD_RULE_TEXT } from '../utils/password';
 
-/** 백엔드 PasswordPolicy 와 같은 규칙. 서버가 최종 검증하고, 화면에서는 입력 중에 미리 알려준다. */
-const PASSWORD_RULE = /^(?=.*[A-Za-z])(?=.*\d)[\x21-\x7E]{8,64}$/;
 
 export default function SignupPage() {
   const { status, signup } = useAuth();
@@ -57,12 +56,12 @@ export default function SignupPage() {
         </label>
         <label>
           비밀번호
-          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete="new-password" />
-          <span className={`hint ${password && !passwordValid ? 'overdue' : ''}`}>영문과 숫자를 포함해 8~64자 (공백·한글 불가)</span>
+          <input aria-label="비밀번호" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete="new-password" />
+          <span className={`hint ${password && !passwordValid ? 'overdue' : ''}`}>{PASSWORD_RULE_TEXT}</span>
         </label>
         <label>
           비밀번호 확인
-          <input type="password" value={passwordConfirm} onChange={(e) => setPasswordConfirm(e.target.value)} required autoComplete="new-password" />
+          <input aria-label="비밀번호 확인" type="password" value={passwordConfirm} onChange={(e) => setPasswordConfirm(e.target.value)} required autoComplete="new-password" />
           {passwordConfirm && !confirmMatches && <span className="hint overdue">비밀번호가 일치하지 않습니다.</span>}
         </label>
         <button type="submit" className="btn btn-primary btn-block" disabled={submitting || !passwordValid || !confirmMatches}>
