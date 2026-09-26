@@ -63,7 +63,7 @@ src
 
 ## 테스트
 
-`npm test` — 32개 (CI 에서 lint·build 와 함께 실행)
+`npm test` — 36개 (CI 에서 lint·build 와 함께 실행)
 
 | 파일 | 검증 내용 |
 |---|---|
@@ -71,7 +71,13 @@ src
 | `components/RouteGuards.test.tsx` | 로그인 안 함 → 로그인 화면, 임시 비밀번호 → 변경 화면 강제, 관리자 전용 화면 차단 |
 | `components/TicketComments.test.tsx` | 내부 메모 표시, 본인 댓글만 삭제 버튼, 관리자만 내부 메모 작성, 종료 티켓 작성 불가 |
 | `pages/SignupPage.test.tsx` | 비밀번호 규칙·확인 불일치 시 가입 불가, 서버 에러 메시지 표시 |
+| `pages/LoginPage.test.tsx` | 로그인 후 가려던 주소로 **검색 조건(query)까지** 복귀 |
 | `utils/password.test.ts` | 비밀번호 규칙이 백엔드와 같은지 |
+| `utils/format.test.ts` | 서버 시각(LocalDateTime)을 브라우저 시간대와 관계없이 그대로 표시 |
+
+테스트 중 발견해 고친 버그
+- **로그인 후 검색 조건이 사라짐**: 로그인이 풀린 상태로 `/tickets?overdue=true` 에 들어가면, 로그인 후 `/tickets` 로만 돌아가 필터가 풀렸음 → 경로와 함께 query·hash 도 복원
+- **날짜 표시를 `new Date()` 에 의존**: 시간대 정보가 없는 서버 시각이 브라우저 시간대로 해석되고, 마이크로초(6자리)는 표준 형식이 아니라 브라우저마다 해석이 다를 수 있었음 → 문자열에서 숫자만 꺼내 표시
 
 ## 백엔드 변경에 따른 수정 내역
 

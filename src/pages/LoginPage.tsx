@@ -14,7 +14,9 @@ export default function LoginPage() {
   const { status, login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const from = (location.state as { from?: Location } | null)?.from?.pathname ?? '/';
+  // 로그인 전에 가려던 주소로 돌려보낸다. 경로만 쓰면 /tickets?overdue=true 의 검색 조건이 사라지므로 query·hash 도 붙인다.
+  const fromLocation = (location.state as { from?: Location } | null)?.from;
+  const from = fromLocation ? `${fromLocation.pathname}${fromLocation.search}${fromLocation.hash}` : '/';
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
