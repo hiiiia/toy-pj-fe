@@ -5,7 +5,8 @@
 | 항목 | 내용 |
 |---|---|
 | Stack | React 18, TypeScript, Vite 5, React Router 7 |
-| 화면 | 로그인·회원가입 · 대시보드 · 티켓 목록/상세 · 자산 관리 · AI 지원 · 사용자 |
+| Test | Vitest, Testing Library (jsdom) |
+| 화면 | 로그인·회원가입·비밀번호 변경 · 대시보드 · 티켓 목록/상세(댓글·첨부) · 자산 관리 · AI 지원 · 사용자 관리 · 알림 |
 | 배포 | Docker (Node 빌드 → nginx 서빙) |
 
 ## 실행
@@ -13,6 +14,7 @@
 ```bash
 npm install
 npm run dev          # http://localhost:5173
+npm test             # 단위·컴포넌트 테스트 (Vitest)
 ```
 
 - 백엔드(`toy-pj`)가 `http://localhost:8080` 에서 실행 중이어야 합니다.
@@ -33,9 +35,14 @@ src
 ├── context
 │   ├── AuthContext.tsx # 로그인 상태 (새로고침 시 refresh token 쿠키로 복원)
 │   └── AppContext.tsx  # 공통 코드(한글 라벨), 사용자 목록(관리자)
-├── components          # Badge, CodeSelect, Pagination, Alert, RouteGuards(로그인·관리자 전용 화면)
-├── pages               # Login, Signup, Dashboard, TicketList, TicketDetail, AssetList, AiSupport, UserList
-└── utils/format.ts     # 날짜 표시
+├── components          # Badge, CodeSelect, Pagination, Alert, RouteGuards(로그인·관리자·비밀번호 변경 강제)
+│                       # TicketComments, TicketAttachments, NotificationBell
+├── pages               # Login, Signup, ChangePassword, Dashboard, TicketList, TicketDetail, AssetList, AiSupport, UserList
+├── utils               # 날짜·파일 크기 표시, 비밀번호 규칙
+└── test/setup.ts       # Vitest 공통 설정 (jest-dom 매처)
+```
+
+테스트 파일은 대상 파일 옆에 `*.test.ts(x)` 로 둡니다.
 ```
 
 ## 설계 포인트
@@ -49,6 +56,22 @@ src
 - **자동 재발급**: API 가 401 을 주면 `/api/auth/refresh` 로 새 토큰을 받아 원래 요청을 한 번 재시도합니다. 여러 요청이 동시에 만료돼도 재발급은 한 번만 합니다. 재발급도 실패하면 로그인 화면으로 이동합니다.
 - **권한별 화면**: 일반 사용자는 "내 티켓 · 내 자산 · AI 지원"만, IT 관리자는 대시보드·담당자 지정·자산 관리·사용자 관리까지 봅니다. 화면에서 숨기는 것은 편의일 뿐이고, 실제 권한 검사는 백엔드가 합니다.
 - **AI → 티켓 연결**: AI 답변으로 해결되지 않으면 대화 내용을 티켓 접수 폼으로 넘깁니다. AI 키가 없거나 장애일 때도 안내 메시지와 함께 접수를 이어갈 수 있습니다.
+- **임시 비밀번호 로그인 시 변경 강제**: 관리자가 초기화한 비밀번호로 로그인하면(`mustChangePassword`) 어떤 주소로 가든 비밀번호 변경 화면으로 보냅니다.
+- **첨부파일 다운로드**: 인증 헤더가 필요해 `<a href>` 로 받을 수 없으므로, `fetch` 로 Blob 을 받아 저장합니다. 5MB 초과 파일은 업로드 전에 화면에서 먼저 막습니다.
+- **알림**: 상단 알림 버튼이 60초마다, 그리고 화면을 이동할 때마다 새 알림을 확인합니다. 알림을 누르면 읽음 처리 후 해당 티켓으로 이동합니다.
+- **에러 문의용 요청 ID**: 서버 오류(5xx)일 때는 메시지 뒤에 요청 ID 를 붙여, 사용자가 알려주면 서버 로그를 바로 찾을 수 있습니다.
+
+## 테스트
+
+`npm test` — 32개 (CI 에서 lint·build 와 함께 실행)
+
+| 파일 | 검증 내용 |
+|---|---|
+| `api/client.test.ts` | 401 → 재발급 → 새 토큰으로 재시도, **동시 요청 3개가 만료돼도 재발급은 1번**, 재발급 실패 시 로그아웃 처리, `/api/auth` 는 재발급 시도 안 함(무한 반복 방지), 에러 메시지·요청 ID, FormData 업로드 |
+| `components/RouteGuards.test.tsx` | 로그인 안 함 → 로그인 화면, 임시 비밀번호 → 변경 화면 강제, 관리자 전용 화면 차단 |
+| `components/TicketComments.test.tsx` | 내부 메모 표시, 본인 댓글만 삭제 버튼, 관리자만 내부 메모 작성, 종료 티켓 작성 불가 |
+| `pages/SignupPage.test.tsx` | 비밀번호 규칙·확인 불일치 시 가입 불가, 서버 에러 메시지 표시 |
+| `utils/password.test.ts` | 비밀번호 규칙이 백엔드와 같은지 |
 
 ## 백엔드 변경에 따른 수정 내역
 
