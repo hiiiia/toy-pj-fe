@@ -1,65 +1,110 @@
-import { useState, useEffect } from 'react';
-import { API_BASE_URL } from '../config';
+import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { dashboardApi } from '../api';
+import { errorMessage } from '../api/client';
+import type { AssetStatus, DashboardSummary, TicketPriority, TicketStatus } from '../api/types';
+import Alert from '../components/Alert';
+import { useApp } from '../context/AppContext';
 
-interface DashboardStats {
-  totalAssets: number;
-  inUseAssets: number;
-  totalTickets: number;
-  pendingTickets: number;
-}
+const TICKET_STATUSES: TicketStatus[] = ['OPEN', 'IN_PROGRESS', 'RESOLVED', 'CLOSED', 'CANCELED'];
+const PRIORITIES: TicketPriority[] = ['URGENT', 'HIGH', 'MEDIUM', 'LOW'];
+const ASSET_STATUSES: AssetStatus[] = ['AVAILABLE', 'IN_USE', 'REPAIR', 'DISPOSED'];
 
 export default function Dashboard() {
-  const [stats, setStats] = useState<DashboardStats>({
-    totalAssets: 0,
-    inUseAssets: 0,
-    totalTickets: 0,
-    pendingTickets: 0,
-  });
+  const { label } = useApp();
+  const [summary, setSummary] = useState<DashboardSummary | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch(`${API_BASE_URL}/api/dashboard/stats`)
-      .then((res) => res.json())
-      .then((data) => setStats(data))
-      .catch((err) => console.error('대시보드 통계 조회 에러:', err));
+    dashboardApi
+      .summary()
+      .then(setSummary)
+      .catch((e) => setError(errorMessage(e)));
   }, []);
 
+  if (error) return <Alert message={error} />;
+  if (!summary) return <p className="muted">불러오는 중...</p>;
+
+  const { tickets, assets } = summary;
+  const active = tickets.byStatus.OPEN + tickets.byStatus.IN_PROGRESS;
+
   return (
-    <div style={{ padding: '20px', backgroundColor: '#ffffff', color: '#333333', borderRadius: '8px' }}>
-      <h2>📊 IT 통합 운영 대시보드</h2>
-      <p style={{ color: '#555555' }}>사내 IT 자산 현황 및 미처리 장애 티켓 실시간 가시성을 제공합니다.</p>
-
-      {/* 통계 요약 카드 영역 */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '15px', marginTop: '20px' }}>
-
-        <div style={{ background: '#f0f5ff', border: '1px solid #adc6ff', padding: '15px', borderRadius: '8px' }}>
-          <span style={{ fontSize: '13px', color: '#2f54eb', fontWeight: 'bold' }}>💻 총 IT 자산</span>
-          <h1 style={{ margin: '10px 0 0 0', color: '#1d39c4' }}>{stats.totalAssets}개</h1>
+    <section>
+      <div className="page-header">
+        <div>
+          <h2>IT 운영 대시보드</h2>
+          <p className="muted">처리해야 할 티켓과 자산 현황을 한눈에 확인합니다.</p>
         </div>
-
-        <div style={{ background: '#e6f7ff', border: '1px solid #91d5ff', padding: '15px', borderRadius: '8px' }}>
-          <span style={{ fontSize: '13px', color: '#1890ff', fontWeight: 'bold' }}>🟢 사용 중인 자산</span>
-          <h1 style={{ margin: '10px 0 0 0', color: '#096dd9' }}>{stats.inUseAssets}개</h1>
-        </div>
-
-        <div style={{ background: '#f6ffed', border: '1px solid #b7eb8f', padding: '15px', borderRadius: '8px' }}>
-          <span style={{ fontSize: '13px', color: '#52c41a', fontWeight: 'bold' }}>🎫 전체 누적 티켓</span>
-          <h1 style={{ margin: '10px 0 0 0', color: '#389e0d' }}>{stats.totalTickets}건</h1>
-        </div>
-
-        <div style={{ background: '#fff2e8', border: '1px solid #ffbb96', padding: '15px', borderRadius: '8px' }}>
-          <span style={{ fontSize: '13px', color: '#fa541c', fontWeight: 'bold' }}>🚨 미처리 접수대기</span>
-          <h1 style={{ margin: '10px 0 0 0', color: '#d4380d' }}>{stats.pendingTickets}건</h1>
-        </div>
-
       </div>
 
-      {/* 안내 박스 */}
-      <div style={{ marginTop: '30px', padding: '15px', background: '#f9f9f9', borderRadius: '6px', border: '1px solid #eee' }}>
-        <h4 style={{ margin: '0 0 8px 0', color: '#333' }}>💡 시스템 요약</h4>
-        <p style={{ margin: 0, fontSize: '14px', color: '#666', lineHeight: '1.5' }}>
-          자산 등록/상태 변경 및 지원 티켓 추가 시 대시보드 데이터가 실시간으로 연동되어 업데이트됩니다.
-        </p>
+      <div className="stat-grid">
+        <StatCard title="처리 대기·진행중 티켓" value={active} unit="건" to="/tickets?status=OPEN" />
+        <StatCard title="담당자 미배정" value={tickets.unassigned} unit="건" to="/tickets?unassigned=true&status=OPEN" tone="warn" />
+        <StatCard title="처리 기한(SLA) 초과" value={tickets.overdue} unit="건" tone={tickets.overdue > 0 ? 'danger' : undefined} />
+        <StatCard title="사용중 자산" value={assets.byStatus.IN_USE} unit={`/ ${assets.total}대`} to="/assets?status=IN_USE" />
       </div>
-    </div>
+
+      <div className="grid-3">
+        <div className="card">
+          <h3>티켓 상태별</h3>
+          <BarList
+            total={tickets.total}
+            rows={TICKET_STATUSES.map((s) => ({ key: s, label: label('ticketStatus', s), value: tickets.byStatus[s], to: `/tickets?status=${s}` }))}
+          />
+        </div>
+        <div className="card">
+          <h3>진행중 티켓 우선순위</h3>
+          <BarList
+            total={active}
+            rows={PRIORITIES.map((p) => ({ key: p, label: label('ticketPriority', p), value: tickets.activeByPriority[p], to: `/tickets?priority=${p}` }))}
+          />
+        </div>
+        <div className="card">
+          <h3>자산 상태별</h3>
+          <BarList
+            total={assets.total}
+            rows={ASSET_STATUSES.map((s) => ({ key: s, label: label('assetStatus', s), value: assets.byStatus[s], to: `/assets?status=${s}` }))}
+          />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function StatCard(props: { title: string; value: number; unit: string; to?: string; tone?: 'warn' | 'danger' }) {
+  const body = (
+    <>
+      <span className="stat-title">{props.title}</span>
+      <strong className="stat-value">
+        {props.value}
+        <small> {props.unit}</small>
+      </strong>
+    </>
+  );
+  const className = `stat-card ${props.tone ? `stat-${props.tone}` : ''}`;
+  return props.to ? (
+    <Link to={props.to} className={className}>
+      {body}
+    </Link>
+  ) : (
+    <div className={className}>{body}</div>
+  );
+}
+
+function BarList({ rows, total }: { rows: { key: string; label: string; value: number; to: string }[]; total: number }) {
+  return (
+    <ul className="bar-list">
+      {rows.map((row) => (
+        <li key={row.key}>
+          <Link to={row.to} className="bar-row">
+            <span className="bar-label">{row.label}</span>
+            <span className="bar-track">
+              <span className="bar-fill" style={{ width: total > 0 ? `${(row.value / total) * 100}%` : 0 }} />
+            </span>
+            <span className="bar-value">{row.value}</span>
+          </Link>
+        </li>
+      ))}
+    </ul>
   );
 }

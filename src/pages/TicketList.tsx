@@ -1,134 +1,293 @@
-import { useState, useEffect, type FormEvent } from 'react';
-import { API_BASE_URL } from '../config';
+import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { aiApi, assetApi, ticketApi } from '../api';
+import { errorMessage } from '../api/client';
+import type {
+  Asset,
+  PageResponse,
+  Ticket,
+  TicketCategory,
+  TicketPriority,
+  TicketSearchParams,
+  TicketStatus,
+  TriageResult,
+} from '../api/types';
+import Alert from '../components/Alert';
+import Badge from '../components/Badge';
+import CodeSelect from '../components/CodeSelect';
+import Pagination from '../components/Pagination';
+import { useApp } from '../context/AppContext';
+import { formatDateTime } from '../utils/format';
 
-interface Ticket {
-  id: number;
+/** AI 지원 화면에서 "티켓으로 접수"를 누르면 넘어오는 초기값 */
+export interface TicketDraft {
   title: string;
   description: string;
-  status: string;
+}
+
+/** 검색 조건을 URL 쿼리에 저장 → 대시보드 링크, 새로고침, 뒤로가기에서도 조건이 유지된다. */
+function readParams(sp: URLSearchParams): TicketSearchParams {
+  return {
+    status: (sp.get('status') as TicketStatus) || undefined,
+    priority: (sp.get('priority') as TicketPriority) || undefined,
+    category: (sp.get('category') as TicketCategory) || undefined,
+    requesterId: sp.get('requesterId') ? Number(sp.get('requesterId')) : undefined,
+    assigneeId: sp.get('assigneeId') ? Number(sp.get('assigneeId')) : undefined,
+    unassigned: sp.get('unassigned') === 'true' || undefined,
+    keyword: sp.get('keyword') || undefined,
+    page: sp.get('page') ? Number(sp.get('page')) : 0,
+    size: 10,
+  };
 }
 
 export default function TicketList() {
-  const [tickets, setTickets] = useState<Ticket[]>([]);
-  const [title, setTitle] = useState<string>('');
-  const [description, setDescription] = useState<string>('');
+  const { currentUser } = useApp();
+  const location = useLocation();
+  const draft = (location.state as { draft?: TicketDraft } | null)?.draft;
 
-  const fetchTickets = () => {
-    fetch(`${API_BASE_URL}/api/tickets`)
-      .then(res => res.json())
-      .then(data => {
-        if (Array.isArray(data)) setTickets(data);
-        else setTickets([]);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const params = readParams(searchParams);
+  const [keyword, setKeyword] = useState(params.keyword ?? '');
+  const [page, setPage] = useState<PageResponse<Ticket> | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [showForm, setShowForm] = useState(Boolean(draft));
+
+  const queryKey = searchParams.toString();
+  const load = useCallback(() => {
+    ticketApi
+      .search(readParams(new URLSearchParams(queryKey)))
+      .then((data) => {
+        setPage(data);
+        setError(null);
       })
-      .catch(err => {
-        console.error('티켓 조회 에러:', err);
-        setTickets([]);
-      });
+      .catch((e) => setError(errorMessage(e)));
+  }, [queryKey]);
+
+  useEffect(load, [load]);
+
+  const updateParam = (key: string, value: string | undefined) => {
+    const next = new URLSearchParams(searchParams);
+    if (value) next.set(key, value);
+    else next.delete(key);
+    next.delete('page'); // 조건이 바뀌면 첫 페이지로
+    setSearchParams(next);
   };
 
-  useEffect(() => {
-    fetchTickets();
-  }, []);
+  const goPage = (p: number) => {
+    const next = new URLSearchParams(searchParams);
+    next.set('page', String(p));
+    setSearchParams(next);
+  };
 
-  const handleCreate = async (e: FormEvent) => {
+  const onSearch = (e: FormEvent) => {
     e.preventDefault();
-    if (!title.trim() || !description.trim()) return;
-
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/tickets`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, description, status: '접수대기' }),
-      });
-
-      if (res.ok) {
-        setTitle('');
-        setDescription('');
-        fetchTickets();
-      }
-    } catch (err) {
-      console.error('티켓 등록 에러:', err);
-    }
+    updateParam('keyword', keyword.trim() || undefined);
   };
 
-  const handleDelete = async (id: number) => {
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/tickets/${id}`, {
-        method: 'DELETE',
-      });
-      if (res.ok) fetchTickets();
-    } catch (err) {
-      console.error('티켓 삭제 에러:', err);
-    }
-  };
-
-  const safeTickets = Array.isArray(tickets) ? tickets : [];
+  const mineOnly = currentUser != null && params.requesterId === currentUser.id;
 
   return (
-    <div style={{ padding: '20px', maxWidth: '800px', backgroundColor: '#ffffff', color: '#333333', borderRadius: '8px', minHeight: '400px' }}>
-      <h2>🎫 IT 지원 티켓 관리 (Incident Management)</h2>
-      <p style={{ color: '#555555' }}>사내 장애 및 IT 지원 요청 내역을 실시간으로 접수하고 추적합니다.</p>
-
-      {/* 티켓 등록 폼 */}
-      <form onSubmit={handleCreate} style={{ display: 'flex', flexDirection: 'column', gap: '10px', margin: '20px 0' }}>
-        <input
-          type="text"
-          placeholder="티켓 제목 (예: 사내 무선랜 접속 불능 장애)"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          style={{ padding: '10px', fontSize: '14px', borderRadius: '4px', border: '1px solid #ccc', backgroundColor: '#fff', color: '#333' }}
-        />
-        <textarea
-          placeholder="상세 내용 (예: 3층 회의실 구역에서 Wi-Fi가 잡히지 않습니다)"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          style={{ padding: '10px', fontSize: '14px', borderRadius: '4px', border: '1px solid #ccc', backgroundColor: '#fff', color: '#333', minHeight: '60px' }}
-        />
-        <button
-          type="submit"
-          style={{ padding: '10px 20px', background: '#0066cc', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', alignSelf: 'flex-end' }}
-        >
-          지원 요청 등록
+    <section>
+      <div className="page-header">
+        <div>
+          <h2>IT 지원 티켓</h2>
+          <p className="muted">장애 신고와 IT 요청을 접수하고 처리 현황을 추적합니다.</p>
+        </div>
+        <button type="button" className="btn btn-primary" onClick={() => setShowForm((v) => !v)}>
+          {showForm ? '접수 닫기' : '+ 티켓 접수'}
         </button>
-      </form>
-
-      {/* 티켓 목록 영역 */}
-      <div style={{ background: '#f9f9f9', padding: '15px', borderRadius: '6px', border: '1px solid #ddd' }}>
-        <h3 style={{ margin: '0 0 10px 0', color: '#111' }}>📋 지원 티켓 목록</h3>
-        {safeTickets.length === 0 ? (
-          <p style={{ margin: 0, color: '#666' }}>등록된 지원 티켓이 없습니다.</p>
-        ) : (
-          <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-            {safeTickets.map(ticket => (
-              <li
-                key={ticket.id}
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  padding: '12px 0',
-                  borderBottom: '1px solid #e1e1e1',
-                  color: '#333'
-                }}
-              >
-                <div>
-                  <strong style={{ fontSize: '15px' }}>{ticket.title}</strong>
-                  <span style={{ background: '#e6f7ff', color: '#1890ff', padding: '2px 6px', borderRadius: '4px', fontSize: '12px', marginLeft: '8px', border: '1px solid #91d5ff' }}>
-                    {ticket.status}
-                  </span>
-                  <p style={{ margin: '5px 0 0 0', color: '#666', fontSize: '13px' }}>{ticket.description}</p>
-                </div>
-                <button
-                  onClick={() => handleDelete(ticket.id)}
-                  style={{ padding: '6px 12px', background: '#ff4d4f', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}
-                >
-                  삭제
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
       </div>
-    </div>
+
+      {showForm && (
+        <TicketCreateForm
+          key={draft?.title ?? 'new'}
+          draft={draft}
+          onCreated={() => setShowForm(false)}
+        />
+      )}
+
+      <div className="card filters">
+        <CodeSelect group="ticketStatus" emptyLabel="전체 상태" value={params.status ?? ''} onChange={(v) => updateParam('status', v)} />
+        <CodeSelect group="ticketPriority" emptyLabel="전체 우선순위" value={params.priority ?? ''} onChange={(v) => updateParam('priority', v)} />
+        <CodeSelect group="ticketCategory" emptyLabel="전체 분류" value={params.category ?? ''} onChange={(v) => updateParam('category', v)} />
+        <label className="checkbox">
+          <input
+            type="checkbox"
+            checked={mineOnly}
+            onChange={(e) => updateParam('requesterId', e.target.checked && currentUser ? String(currentUser.id) : undefined)}
+          />
+          내가 요청한 티켓
+        </label>
+        <label className="checkbox">
+          <input type="checkbox" checked={Boolean(params.unassigned)} onChange={(e) => updateParam('unassigned', e.target.checked ? 'true' : undefined)} />
+          미배정만
+        </label>
+        <form onSubmit={onSearch} className="search">
+          <input value={keyword} onChange={(e) => setKeyword(e.target.value)} placeholder="제목·내용 검색" />
+          <button type="submit" className="btn">검색</button>
+        </form>
+      </div>
+
+      <Alert message={error} />
+
+      {page && (
+        <div className="card">
+          {page.content.length === 0 ? (
+            <p className="muted empty">조건에 맞는 티켓이 없습니다.</p>
+          ) : (
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>제목</th>
+                    <th>상태</th>
+                    <th>우선순위</th>
+                    <th>분류</th>
+                    <th>요청자</th>
+                    <th>담당자</th>
+                    <th>처리 기한</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {page.content.map((t) => (
+                    <tr key={t.id}>
+                      <td className="muted">{t.id}</td>
+                      <td>
+                        <Link to={`/tickets/${t.id}`} className="title-link">
+                          {t.title}
+                        </Link>
+                      </td>
+                      <td><Badge group="ticketStatus" code={t.status} /></td>
+                      <td><Badge group="ticketPriority" code={t.priority} /></td>
+                      <td><Badge group="ticketCategory" code={t.category} /></td>
+                      <td>{t.requesterName}</td>
+                      <td>{t.assigneeName ?? <span className="muted">미배정</span>}</td>
+                      <td className={t.overdue ? 'overdue' : ''}>
+                        {formatDateTime(t.dueAt)}
+                        {t.overdue && ' (초과)'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <Pagination page={page} onChange={goPage} />
+        </div>
+      )}
+    </section>
+  );
+}
+
+function TicketCreateForm({ draft, onCreated }: { draft?: TicketDraft; onCreated: () => void }) {
+  const { currentUser, label } = useApp();
+  const navigate = useNavigate();
+  const [title, setTitle] = useState(draft?.title ?? '');
+  const [description, setDescription] = useState(draft?.description ?? '');
+  const [category, setCategory] = useState('');
+  const [priority, setPriority] = useState('');
+  const [assetId, setAssetId] = useState('');
+  const [myAssets, setMyAssets] = useState<Asset[]>([]);
+  const [preview, setPreview] = useState<TriageResult | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // 현재 사용자가 사용중인 자산만 선택지로 제공
+  useEffect(() => {
+    if (!currentUser) return;
+    assetApi
+      .search({ assignedUserId: currentUser.id, size: 50 })
+      .then((p) => setMyAssets(p.content))
+      .catch(() => setMyAssets([]));
+  }, [currentUser]);
+
+  const runPreview = async () => {
+    if (!title.trim() || !description.trim()) {
+      setError('제목과 내용을 입력하면 자동 분류 결과를 미리 볼 수 있습니다.');
+      return;
+    }
+    try {
+      setPreview(await aiApi.triage(title, description));
+      setError(null);
+    } catch (e) {
+      setError(errorMessage(e));
+    }
+  };
+
+  const onSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!currentUser) {
+      setError('상단에서 현재 사용자를 먼저 선택하세요.');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const created = await ticketApi.create({
+        title: title.trim(),
+        description: description.trim(),
+        category: (category || undefined) as TicketCategory | undefined,
+        priority: (priority || undefined) as TicketPriority | undefined,
+        requesterId: currentUser.id,
+        assetId: assetId ? Number(assetId) : undefined,
+      });
+      onCreated();
+      navigate(`/tickets/${created.id}`); // 접수 직후 상세 화면에서 자동 분류 결과와 처리 기한을 확인
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <form className="card form" onSubmit={onSubmit}>
+      <h3>티켓 접수 <span className="muted small">요청자: {currentUser?.name ?? '-'}</span></h3>
+      <Alert message={error} onClose={() => setError(null)} />
+      <label>
+        제목
+        <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={100} required placeholder="예: 3층 회의실 와이파이 접속 불가" />
+      </label>
+      <label>
+        상세 내용
+        <textarea value={description} onChange={(e) => setDescription(e.target.value)} maxLength={2000} required rows={4} placeholder="언제부터, 어떤 증상인지 적어주세요." />
+      </label>
+      <div className="form-row">
+        <label>
+          분류
+          <CodeSelect group="ticketCategory" emptyLabel="자동 분류" value={category} onChange={setCategory} />
+        </label>
+        <label>
+          우선순위
+          <CodeSelect group="ticketPriority" emptyLabel="자동 분류" value={priority} onChange={setPriority} />
+        </label>
+        <label>
+          관련 자산
+          <select value={assetId} onChange={(e) => setAssetId(e.target.value)}>
+            <option value="">없음</option>
+            {myAssets.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.name} ({a.serialNumber})
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <p className="hint">분류·우선순위를 비워두면 AI가 자동으로 판단합니다. (AI를 사용할 수 없으면 키워드 규칙으로 분류)</p>
+      {preview && (
+        <p className="preview">
+          자동 분류 미리보기: <Badge group="ticketCategory" code={preview.category} /> <Badge group="ticketPriority" code={preview.priority} />
+          <span className="muted small"> · {label('classificationSource', preview.source)}{preview.reason ? ` · ${preview.reason}` : ''}</span>
+        </p>
+      )}
+      <div className="form-actions">
+        <button type="button" className="btn" onClick={runPreview}>
+          자동 분류 미리보기
+        </button>
+        <button type="submit" className="btn btn-primary" disabled={submitting}>
+          {submitting ? '접수 중...' : '접수하기'}
+        </button>
+      </div>
+    </form>
   );
 }

@@ -1,69 +1,93 @@
 import { useState, type FormEvent } from 'react';
-import { API_BASE_URL } from '../config';
+import { useNavigate } from 'react-router-dom';
+import { aiApi } from '../api';
+import { ApiError } from '../api/client';
+import type { TicketDraft } from './TicketList';
+
+interface Message {
+  role: 'user' | 'ai' | 'error';
+  text: string;
+}
 
 export default function AiSupport() {
-  const [prompt, setPrompt] = useState<string>('');
-  const [response, setResponse] = useState<string>('');
-  const [loading, setLoading] = useState<boolean>(false);
+  const navigate = useNavigate();
+  const [input, setInput] = useState('');
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e: FormEvent) => {
+  const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!prompt.trim()) return;
+    const message = input.trim();
+    if (!message || loading) return;
 
+    setMessages((prev) => [...prev, { role: 'user', text: message }]);
+    setInput('');
     setLoading(true);
-    setResponse('');
-
     try {
-      const res = await fetch(`${API_BASE_URL}/api/gemini/chat`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ prompt }),
-      });
-
-      if (!res.ok) {
-        throw new Error('서버 통신에 실패했습니다.');
-      }
-
-      const data = await res.text();
-      setResponse(data);
+      // 요청: { message } → 응답: { answer }
+      const { answer } = await aiApi.chat(message);
+      setMessages((prev) => [...prev, { role: 'ai', text: answer }]);
     } catch (err) {
-      console.error('AI 연동 에러:', err);
-      setResponse('AI 응답을 가져오는 중 오류가 발생했습니다.');
+      const text =
+        err instanceof ApiError && err.code === 'AI001'
+          ? 'AI 서비스를 사용할 수 없습니다. (서버에 GEMINI_API_KEY 설정 필요) 아래 버튼으로 바로 티켓을 접수할 수 있어요.'
+          : err instanceof Error
+            ? err.message
+            : 'AI 응답을 가져오지 못했습니다.';
+      setMessages((prev) => [...prev, { role: 'error', text }]);
     } finally {
       setLoading(false);
     }
   };
 
+  /** 마지막 질문을 티켓 초안으로 넘겨 접수 폼을 채워준다 */
+  const toTicket = () => {
+    const lastQuestion = [...messages].reverse().find((m) => m.role === 'user')?.text ?? '';
+    const draft: TicketDraft = {
+      title: lastQuestion.slice(0, 50),
+      // 오류 메시지는 제외하고 문의/AI 답변 내용만 티켓 본문으로 옮긴다
+      description: messages
+        .filter((m) => m.role !== 'error')
+        .map((m) => `[${m.role === 'user' ? '문의' : 'AI 답변'}] ${m.text}`)
+        .join('\n\n')
+        .slice(0, 2000),
+    };
+    navigate('/tickets', { state: { draft } });
+  };
+
   return (
-    <div style={{ padding: '20px', maxWidth: '800px' }}>
-      <h2>🤖 AI IT 지원 센터 (Gemini 연동)</h2>
-      <p>시스템 장애 문의 및 IT 가이드를 AI가 실시간으로 지원합니다.</p>
-
-      <form onSubmit={handleSubmit} style={{ display: 'flex', gap: '10px', margin: '20px 0' }}>
-        <input
-          type="text"
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          placeholder="IT 장애 내용이나 문의사항을 입력하세요..."
-          style={{ flex: 1, padding: '10px', fontSize: '14px', borderRadius: '4px', border: '1px solid #ccc' }}
-        />
-        <button
-          type="submit"
-          disabled={loading}
-          style={{ padding: '10px 20px', background: '#0066cc', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-        >
-          {loading ? 'AI 분석 중...' : '문의하기'}
-        </button>
-      </form>
-
-      <div style={{ background: '#f9f9f9', padding: '15px', borderRadius: '6px', border: '1px solid #ddd', minHeight: '100px', color: '#333' }}>
-        <h3 style={{ margin: '0 0 10px 0', color: '#111' }}>💡 AI 답변 결과:</h3>
-        <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all', fontFamily: 'inherit', fontSize: '14px', margin: 0 }}>
-          {response || '질문을 입력하고 AI의 답변을 확인해 보세요.'}
-        </pre>
+    <section>
+      <div className="page-header">
+        <div>
+          <h2>AI IT 지원</h2>
+          <p className="muted">간단한 IT 문제는 AI에게 먼저 물어보고, 해결되지 않으면 티켓으로 접수하세요.</p>
+        </div>
       </div>
-    </div>
+
+      <div className="card chat">
+        <div className="chat-log">
+          {messages.length === 0 && <p className="muted empty">예: "VPN이 자꾸 끊겨요", "프린터 드라이버 설치 방법 알려줘"</p>}
+          {messages.map((m, i) => (
+            <div key={i} className={`chat-bubble chat-${m.role}`}>
+              {m.text}
+            </div>
+          ))}
+          {loading && <div className="chat-bubble chat-ai muted">답변을 작성하고 있어요...</div>}
+        </div>
+        <form onSubmit={onSubmit} className="chat-input">
+          <input value={input} onChange={(e) => setInput(e.target.value)} maxLength={1000} placeholder="IT 문의사항을 입력하세요" />
+          <button type="submit" className="btn btn-primary" disabled={loading || !input.trim()}>
+            보내기
+          </button>
+        </form>
+        {messages.some((m) => m.role === 'user') && (
+          <div className="form-actions">
+            <button type="button" className="btn" onClick={toTicket}>
+              해결되지 않았나요? 이 내용으로 티켓 접수 →
+            </button>
+          </div>
+        )}
+      </div>
+    </section>
   );
 }
