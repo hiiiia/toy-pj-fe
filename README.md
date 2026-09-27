@@ -1,6 +1,6 @@
 # yh-fe · IT 헬프데스크 프론트엔드
 
-[toy-pj](https://github.com/OWNER/toy-pj) 백엔드 API를 사용하는 React + TypeScript 화면입니다.
+[toy-pj-be](https://github.com/hiiiia/toy-pj-be) 백엔드 API를 사용하는 React + TypeScript 화면입니다.
 
 ![티켓 목록](docs/images/ticket-list.png)
 
