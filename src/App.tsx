@@ -10,6 +10,7 @@ import ChangePasswordPage from './pages/ChangePasswordPage';
 import Dashboard from './pages/Dashboard';
 import LoginPage from './pages/LoginPage';
 import NotFound from './pages/NotFound';
+import OAuthCallbackPage from './pages/OAuthCallbackPage';
 import SignupPage from './pages/SignupPage';
 import TicketDetail from './pages/TicketDetail';
 import TicketList from './pages/TicketList';
@@ -24,6 +25,7 @@ export default function App() {
           <Routes>
             <Route path="/login" element={<LoginPage />} />
             <Route path="/signup" element={<SignupPage />} />
+            <Route path="/oauth/callback" element={<OAuthCallbackPage />} />
             <Route
               element={
                 <RequireAuth>

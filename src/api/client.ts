@@ -4,7 +4,7 @@ import type { ErrorResponse, FieldError, TokenResponse } from './types';
  * 비워두면 같은 출처(/api)로 요청하고, 개발 중에는 Vite 프록시가 백엔드로 전달한다.
  * 프론트와 백엔드를 다른 도메인에 배포할 때만 VITE_API_BASE_URL 을 지정한다.
  */
-const API_BASE_URL: string = import.meta.env.VITE_API_BASE_URL || '';
+export const API_BASE_URL: string = import.meta.env.VITE_API_BASE_URL || '';
 
 /**
  * 백엔드 공통 에러 포맷(ErrorResponse)을 담는 예외.

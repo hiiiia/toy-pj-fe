@@ -1,4 +1,4 @@
-import { http, setAccessToken, toQuery } from './client';
+import { API_BASE_URL, http, setAccessToken, toQuery } from './client';
 import type {
   Asset,
   AssetCreateRequest,
@@ -27,7 +27,14 @@ import type {
 
 /** 백엔드 엔드포인트를 한 곳에 모아 페이지 컴포넌트에서 URL 문자열을 직접 다루지 않게 한다. */
 
+export type SocialProvider = 'google' | 'kakao' | 'naver';
+
 export const authApi = {
+  /**
+   * SNS 로그인 시작 주소. fetch 가 아니라 페이지 이동(<a href>)으로 열어야 제공자 로그인 화면으로 넘어간다.
+   * 로그인이 끝나면 백엔드가 refresh 쿠키를 심고 /oauth/callback 으로 돌려보낸다.
+   */
+  socialLoginUrl: (provider: SocialProvider) => `${API_BASE_URL}/oauth2/authorization/${provider}`,
   login: async (email: string, password: string) => {
     const session = await http.post<TokenResponse>('/api/auth/login', { email, password });
     setAccessToken(session.accessToken);

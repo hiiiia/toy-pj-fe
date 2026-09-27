@@ -8,7 +8,7 @@
 |---|---|
 | Stack | React 18, TypeScript, Vite 5, React Router 7 |
 | Test | Vitest, Testing Library (jsdom) |
-| 화면 | 로그인·회원가입·비밀번호 변경 · 대시보드 · 티켓 목록/상세(댓글·첨부) · 자산 관리 · AI 지원 · 사용자 관리 · 알림 |
+| 화면 | 로그인(이메일 · Google · 카카오 · 네이버)·회원가입·비밀번호 변경 · 대시보드 · 티켓 목록/상세(댓글·첨부) · 자산 관리 · AI 지원 · 사용자 관리 · 알림 |
 | 배포 | Docker (Node 빌드 → nginx 서빙) |
 
 ## 실행
@@ -25,6 +25,7 @@ npm test             # 단위·컴포넌트 테스트 (Vitest)
 - Docker 로 전체 실행: `toy-pj` 폴더에서 `docker compose up -d --build` → http://localhost:3000
 - 다른 주소의 백엔드를 쓰려면: `BACKEND_URL=http://localhost:18080 npm run dev`
 - 개발 서버는 `/api` 요청을 백엔드로 **프록시**하므로 브라우저 CORS 설정 없이 동작합니다. ([`vite.config.ts`](vite.config.ts))
+  SNS 로그인 주소(`/oauth2/**`, `/login/oauth2/**`)도 같이 프록시하므로, 각 개발자 콘솔의 콜백 주소는 `http://localhost:5173/login/oauth2/code/{google|kakao|naver}` 로 등록합니다.
   Docker 에서는 nginx 가 같은 역할을 합니다. ([`nginx.conf`](nginx.conf))
 
 ## 구조
@@ -59,6 +60,7 @@ src
 - **자동 재발급**: API 가 401 을 주면 `/api/auth/refresh` 로 새 토큰을 받아 원래 요청을 한 번 재시도합니다. 여러 요청이 동시에 만료돼도 재발급은 한 번만 합니다. 재발급도 실패하면 로그인 화면으로 이동합니다.
 - **권한별 화면**: 일반 사용자는 "내 티켓 · 내 자산 · AI 지원"만, IT 관리자는 대시보드·담당자 지정·자산 관리·사용자 관리까지 봅니다. 화면에서 숨기는 것은 편의일 뿐이고, 실제 권한 검사는 백엔드가 합니다.
 - **AI → 티켓 연결**: AI 답변으로 해결되지 않으면 대화 내용을 티켓 접수 폼으로 넘깁니다. AI 키가 없거나 장애일 때도 안내 메시지와 함께 접수를 이어갈 수 있습니다.
+- **SNS 로그인**: 버튼은 fetch 가 아니라 **페이지 이동**(`/oauth2/authorization/{provider}`). 제공자 로그인 후 백엔드가 refresh 쿠키만 심고 `/oauth/callback` 으로 돌려보내면, 앱 시작 시의 재발급으로 로그인 상태가 됩니다. access token 을 URL 로 받지 않습니다(방문 기록·Referer 에 남음). 로그인 전에 가려던 주소는 sessionStorage 에 잠시 맡기고, 사이트 안의 경로만 허용해 외부 주소로 보내는 통로(open redirect)를 막습니다. 거부·실패 시 `/login?error=AUTH009|010|011` 로 돌아와 이유를 보여줍니다.
 - **임시 비밀번호 로그인 시 변경 강제**: 관리자가 초기화한 비밀번호로 로그인하면(`mustChangePassword`) 어떤 주소로 가든 비밀번호 변경 화면으로 보냅니다. 서버도 이 상태에서는 다른 API 를 `403 AUTH008` 로 막으므로, 알림·사용자 목록 조회는 비밀번호를 바꾼 뒤에 시작합니다.
 - **우선순위는 관리자만 지정**: 일반 사용자의 접수 폼에는 우선순위 선택이 없습니다. 우선순위는 자동 분류되고 담당자가 조정합니다(서버도 같은 규칙).
 - **첨부파일 다운로드**: 인증 헤더가 필요해 `<a href>` 로 받을 수 없으므로, `fetch` 로 Blob 을 받아 저장합니다. 5MB 초과 파일은 업로드 전에 화면에서 먼저 막습니다.
@@ -67,7 +69,7 @@ src
 
 ## 테스트
 
-`npm test` — 36개 (CI 에서 lint·build 와 함께 실행)
+`npm test` — 47개 (CI 에서 lint·build 와 함께 실행)
 
 | 파일 | 검증 내용 |
 |---|---|
@@ -75,7 +77,9 @@ src
 | `components/RouteGuards.test.tsx` | 로그인 안 함 → 로그인 화면, 임시 비밀번호 → 변경 화면 강제, 관리자 전용 화면 차단 |
 | `components/TicketComments.test.tsx` | 내부 메모 표시, 본인 댓글만 삭제 버튼, 관리자만 내부 메모 작성, 종료 티켓 작성 불가 |
 | `pages/SignupPage.test.tsx` | 비밀번호 규칙·확인 불일치 시 가입 불가, 서버 에러 메시지 표시 |
-| `pages/LoginPage.test.tsx` | 로그인 후 가려던 주소로 **검색 조건(query)까지** 복귀 |
+| `pages/LoginPage.test.tsx` | 로그인 후 가려던 주소로 **검색 조건(query)까지** 복귀, SNS 버튼 주소, SNS 로그인 거부 사유 표시 |
+| `pages/OAuthCallbackPage.test.tsx` | SNS 로그인 후 재발급 성공 → 가려던 주소로, 실패 → 로그인 화면(`AUTH011`) |
+| `utils/socialLogin.test.ts` | 에러 코드 → 문구, 복귀 주소는 사이트 안 경로만 허용 (`//evil.example` 차단) |
 | `utils/password.test.ts` | 비밀번호 규칙이 백엔드와 같은지 |
 | `utils/format.test.ts` | 서버 시각(LocalDateTime)을 브라우저 시간대와 관계없이 그대로 표시 |
 

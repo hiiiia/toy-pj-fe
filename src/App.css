@@ -512,6 +512,39 @@ td:has(.title-link) {
   border-top: 1px dashed var(--border);
 }
 
+.social-login {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.btn-social {
+  display: block;
+  text-align: center;
+  text-decoration: none;
+  font-weight: 600;
+}
+.btn-social.google:hover:not(:disabled) {
+  border-color: #4285f4;
+}
+/* 각 제공자의 공식 버튼 색 */
+.btn-social.kakao {
+  background: #fee500;
+  border-color: #fee500;
+  color: rgba(0, 0, 0, 0.85);
+}
+.btn-social.naver {
+  background: #03c75a;
+  border-color: #03c75a;
+  color: #fff;
+}
+.btn-social.kakao:hover,
+.btn-social.naver:hover {
+  filter: brightness(0.95);
+}
+
 /* ===== 공통 보조 ===== */
 .narrow {
   max-width: 520px;

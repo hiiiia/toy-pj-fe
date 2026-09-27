@@ -1,13 +1,21 @@
 import { useState, type FormEvent } from 'react';
-import { Link, Navigate, useLocation, useNavigate, type Location } from 'react-router-dom';
+import { Link, Navigate, useLocation, useNavigate, useSearchParams, type Location } from 'react-router-dom';
+import { authApi, type SocialProvider } from '../api';
 import { errorMessage } from '../api/client';
 import Alert from '../components/Alert';
 import { useAuth } from '../context/AuthContext';
+import { saveSocialReturnPath, socialLoginErrorMessage } from '../utils/socialLogin';
 
 /** 개발 서버에서만 보이는 데모 계정 (백엔드 local 프로필의 샘플 데이터) */
 const DEMO_ACCOUNTS = [
   { label: 'IT 관리자', email: 'admin@daon.example', password: 'admin1234' },
   { label: '일반 사용자', email: 'hong@daon.example', password: 'user1234' },
+];
+
+const SOCIAL_PROVIDERS: { id: SocialProvider; label: string }[] = [
+  { id: 'google', label: 'Google' },
+  { id: 'kakao', label: '카카오' },
+  { id: 'naver', label: '네이버' },
 ];
 
 export default function LoginPage() {
@@ -20,7 +28,9 @@ export default function LoginPage() {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  // SNS 로그인이 거부·실패하면 백엔드가 /login?error=AUTH0xx 로 돌려보낸다
+  const [searchParams] = useSearchParams();
+  const [error, setError] = useState<string | null>(() => socialLoginErrorMessage(searchParams.get('error')));
   const [submitting, setSubmitting] = useState(false);
 
   if (status === 'authenticated') return <Navigate to={from} replace />;
@@ -58,6 +68,21 @@ export default function LoginPage() {
         <p className="muted small center">
           계정이 없나요? <Link to="/signup">회원가입</Link>
         </p>
+
+        {/* SNS 로그인은 fetch 가 아니라 페이지 이동: 제공자 로그인 화면을 거쳐 /oauth/callback 으로 돌아온다 */}
+        <div className="social-login">
+          <span className="muted small center">또는 SNS 계정으로 계속하기</span>
+          {SOCIAL_PROVIDERS.map((p) => (
+            <a
+              key={p.id}
+              className={`btn btn-block btn-social ${p.id}`}
+              href={authApi.socialLoginUrl(p.id)}
+              onClick={() => saveSocialReturnPath(from)}
+            >
+              {p.label}로 계속하기
+            </a>
+          ))}
+        </div>
 
         {import.meta.env.DEV && (
           <div className="demo-accounts">
